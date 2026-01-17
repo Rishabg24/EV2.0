@@ -10,34 +10,33 @@ Encoder Rencoder(3 /*Encoder Pin A*/, 5 /*Encoder Pin B*/);
 Motor Rmotor(8 /*IN1*/, 9 /*IN2*/, 11 /*ENA*/);
 Encoder Lencoder(2 /*Encoder Pin A*/, 4 /*Encoder Pin B*/);
 Motor Lmotor(6 /*IN3*/ , 7 /*IN4*/ ,10 /*ENB*/);
-PID right(0.1f/*Kp*/, 0.999f/*Ki*/, 0.f/*Kd*/, 40.f/*Diameter of the wheels*/, 75.81f /*Gear Ratio of Motor*/, 12 /*CPR*/);
-PID left(0.11f/*Kp*/, 1.03f/*Ki*/, 0.f/*Kd*/, 40.f/*Diameter of the wheels*/, 75.81f /*Gear Ratio of Motor*/, 12 /*CPR*/);
-uint8_t buttonState;
+PID right(.9f/*Kp*/, .18f/*Ki*/, 0.0f/*Kd*/, 60.f/*Diameter of the wheels*/, 100.37f /*Gear Ratio of Motor*/, 12 /*CPR*/);
+PID left(.9f/*Kp*/, .18f/*Ki*/, 0.0f/*Kd*/, 60.f/*Diameter of the wheels*/, 100.37f /*Gear Ratio of Motor*/, 12 /*CPR*/);
+uint8_t butxtonState;
 
-Drive drive(left, right, Lmotor, Rmotor, Lencoder, Rencoder, mpu, 106 /* The distance between the wheels*/, 40 /* The diameter of the wheels*/);
+Drive drive(left, right, Lmotor, Rmotor, Lencoder, Rencoder, mpu, 106 /* The distance between the wheels*/, 60 /* The diameter of the wheels*/);
 
+bool lastState = HIGH;
 
 void setup() {
-  pinMode(12, INPUT);
+  pinMode(12, INPUT_PULLUP);
   drive.begin();
+  Serial.begin(9600);
 }
 
-void loop() {
-  sensors_event_t a , g, temp;
-  mpu.getEvent(&a, &g, &temp);
-  buttonState = digitalRead(12);
-  bool runState = false;
-  if(buttonState == HIGH){
-    runState = true;
-    Serial.println("button pressed");
-  }else{
-    runState = false;
-  }
 
+void loop() {
+  bool currentState = digitalRead(12);
+  bool runState = false;
+  if (lastState == HIGH && currentState == LOW) {
+    Serial.println("Button pressed");
+    runState = !runState;
+  }
+ 
+  lastState = currentState;
+  delay(20);
   if(runState){
-    drive.accel(300,50);
-    drive.driveDistance(1000,300);
-    delay(5000);
+    drive.driveDistance(1000,700);
     drive.stop();
     runState = false;
   }
