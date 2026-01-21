@@ -30,6 +30,8 @@ class Drive{
         void sTurnR(int speed);
         void sTurnL(int speed);
         void turn(float degree, int speed);
+        void EKFturn(float degree, int speed);
+        void trapezoidManuever(float lateralDistance, float totalDistance, int speed);
         void begin();
         void accel(int targetSpeed, int accelRate);
         void decel(int targetSpeed, int decelRate);

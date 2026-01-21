@@ -36,7 +36,10 @@ void loop() {
   lastState = currentState;
   delay(20);
   if(runState){
-    drive.driveDistance(1000,700);
+    // change to trapezoidManuever for trapezoid maneuver
+    // lateral distance should be 0.5m to test, and total distance can be whatever
+    // speed needs to be calculated based on the time we want it to take. 
+    drive.driveDistance(1000,700); 
     drive.stop();
     runState = false;
   }

@@ -42,6 +42,7 @@ void Drive::begin()
     delay(100);
 }
 
+// EKF Assisted Drive Distance
 void Drive::driveDistance(float distance, int speed)
 {
     EKFState ekf(wBase, wDiameter / 2.f);
@@ -105,10 +106,142 @@ void Drive::driveDistance(float distance, int speed)
             Serial.print(",");
             Serial.println(ekf.getTheta());
         }
-        
     }
-   
+
     stop();
+}
+
+// EKF Assisted Turn (if ever necessary)
+void Drive::EKFturn(float theta_Radians, int speed)
+{
+    EKFState ekf(wBase, wDiameter / 2.f);
+    sensors_event_t a, g, temp;
+    float targetTheta = theta_Radians; // TrapezoidManuever will pass in radian angles for turning
+    reset();
+    Lcon.reset();
+    Rcon.reset();
+    ekf.reset();
+    unsigned long prevTime = millis();
+    unsigned long now = millis();
+    unsigned long start = millis();
+    float dt = 0.0f;
+    float LastLeftDist = 0.0f;
+    float LastRightDist = 0.0f;
+
+    int turnSpeed = (targetTheta > 0) ? speed : -speed; // Determine turn direction based on sign of targetTheta
+
+    while (abs(ekf.getTheta()) < abs(targetTheta))
+    {
+        now = millis();
+        dt = now - prevTime / 1000.f;
+        if (dt >= 0.02f)
+        {
+            float leftDist = Lenc.read() * Lcon.MPC;
+            float rightDist = Renc.read() * Rcon.MPC;
+
+            float deltaLeft = leftDist - LastLeftDist;
+            float deltaRight = rightDist - LastRightDist;
+
+            ekf.predict(deltaLeft, deltaRight);
+
+            mpu.getEvent(&a, &g, &temp);
+            float gyroX = g.gyro.z - bias;
+
+            ekf.update(gyroX, dt);
+
+            int currentSpeed = turnSpeed;
+            if (abs(ekf.getTheta()) > abs(targetTheta) * 0.8f)
+            {
+                currentSpeed = turnSpeed / 2;
+            }
+
+            // Tank turn: opposite wheel directions
+            Lmotor.drive(Lcon.output(Lenc, currentSpeed, dt));
+            Rmotor.drive(Rcon.output(Renc, -currentSpeed, dt));
+
+            prevTime = now;
+
+            // Debug
+            Serial.print((now - start) / 1000.0f);
+            Serial.print(",");
+            Serial.print(ekf.getTheta() * 180.0f / PI);
+            Serial.print(",");
+            Serial.println(targetTheta * 180.0f / PI);
+        }
+    }
+    stop();
+}
+
+void Drive::trapezoidManuever(float lateralDistance, float totalDistance, int speed)
+{
+    // Implementation of trapezoidal maneuver
+    // This function would control the vehicle to move in a trapezoidal path
+    // based on the provided lateral distance and total distance.
+    // distance inputs in meters
+
+    float d = totalDistance;
+    float h = lateralDistance; // should be 0.5m
+
+    float DiagonalDistance = (sqrt(((d / 4) * (d / 4)) + (h * h))) * 1000.f; // in mm
+    float DistanceThroughGate = (d / 2.f) * 1000.f;                          // in mm
+
+    float angle = atan2(h, d / 4); // angle in radians
+
+    enum State
+    {
+        INIT_TURN,
+        DIAGONAL_TRANSIT_1,
+        ALIGN_GATE,
+        DRIVE_GATE,
+        EXIT_TURN,
+        DIAGONAL_TRANSIT_2,
+        COMPLETE
+    };
+
+    State currentState = INIT_TURN;
+
+    while ((!currentState) == COMPLETE)
+    {
+        switch (currentState)
+        {
+        case INIT_TURN:
+            // Turn towards the first diagonal
+            // Assuming a function turn(angle, speed) exists
+            turn(angle * 180.0f / PI, speed); // converting to degrees for turn function
+            currentState = DIAGONAL_TRANSIT_1;
+            break;
+        case DIAGONAL_TRANSIT_1:
+            // Drive the diagonal distance
+            driveDistance(DiagonalDistance, speed);
+            currentState = ALIGN_GATE;
+            break;
+        case ALIGN_GATE:
+            // Align to face the gate directly
+            turn(-angle * 180.0f / PI, speed); // negative angle to realign
+            currentState = DRIVE_GATE;
+            break;
+        case DRIVE_GATE:
+            // Drive through the gate
+            driveDistance(DistanceThroughGate, speed);
+            currentState = EXIT_TURN;
+            break;
+        case EXIT_TURN:
+            // Turn to face the exit diagonal
+            turn(-angle * 180.0f / PI, speed);
+            currentState = DIAGONAL_TRANSIT_2;
+            break;
+        case DIAGONAL_TRANSIT_2:
+            // Drive the second diagonal distance
+            driveDistance(DiagonalDistance, speed);
+            currentState = COMPLETE;
+            break;
+        case COMPLETE:
+            // Maneuver complete
+            stop();
+            break;
+        }
+    }
+    stop(); // just in case
 }
 
 void Drive::stop()
