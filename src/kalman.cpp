@@ -1,4 +1,4 @@
-#include <../include/kalman.h>
+#include <kalman.h>
 #include <Arduino.h>
 #include <math.h>
 
@@ -137,14 +137,6 @@ void EKFState::predict(float d_left, float d_right)
         }
     }
 
-    // for (int i = 0; i < 3; i++)
-    // {
-    //     for (int j = 0; j < 3; j++)
-    //     {
-    //         P[i][j] = P_new[i][j];
-    //     }
-    // }
-
     // Update the global P matrix
     memcpy(P, P_new, sizeof(P));
 }
@@ -195,14 +187,7 @@ void EKFState::update(float gyro_z, float dt)
     float P_new[3][3];
     matrixMultiply(IKH, P, P_new);
 
-    // for (int i = 0; i < 3; i++)
-    // {
-    //     for (int j = 0; j < 3; j++)
-    //     {
-    //         P[i][j] = P_new[i][j];
-    //     }
-    // }
-
+    // Update the global P matrix
     memcpy(P, P_new, sizeof(P));
 }
 
@@ -220,9 +205,9 @@ void EKFState::reset()
         }
     }
 
-    P[0][0] = 0.001f; // TUNE THESE VALUES
-    P[1][1] = 0.001f; // TUNE THESE VALUES
-    P[2][2] = 0.001f; // TUNE THESE VALUES
+    P[0][0] = 0.001f;
+    P[1][1] = 0.001f; 
+    P[2][2] = 0.001f; 
 }
 
 void EKFState::printState()

@@ -5,6 +5,7 @@
 #include "PID.h"
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
+#include <kalman.h>
 
 class Drive{
     public:
@@ -49,9 +50,11 @@ class Drive{
         float wDiameter;
         float bias = 0.f;
 
-        float Kp = 0.0001f;
+        float Kp = 0.0001f; // if this doesn't work try 30.0f
 
         uint8_t startPWM(int linSpeed);
+
+        EKFState ekf(float wb, float wr);
 
 };
 
