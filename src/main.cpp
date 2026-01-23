@@ -39,7 +39,8 @@ void loop() {
     // change to trapezoidManuever for trapezoid maneuver
     // lateral distance should be 0.5m to test, and total distance can be whatever
     // speed needs to be calculated based on the time we want it to take. 
-    drive.driveDistance(1000,700); 
+    drive.driveDistance(1000,700, 0.0f); // driveDistance in mm, speed in PWM value, theta in radians
+    // drive.trapezoidManuever(0.5f, 2.0f, 700);
     drive.stop();
     runState = false;
   }

@@ -76,20 +76,20 @@ void EKFState::predict(float d_left, float d_right)
     // KINEMATICS: Convert encoder ticks to center displacement and heading change
     float d_center = (d_left + d_right) / 2.0f;
     float d_theta = (d_right - d_left) / wheelbase;
-    float theta_old = theta;
+    float half_theta = theta + (d_theta/ 2.0f);
 
     // STATE ESTIMATE UPDATE: Moving the robot in the world
     if (abs(d_theta) < 1e-6) // Straight line case (prevents division by zero)
     {
-        x += d_center * cos(theta_old);
-        y += d_center * sin(theta_old);
+        x += d_center * cos(half_theta);
+        y += d_center * sin(half_theta);
         theta += d_theta;
     }
     else // Arc or trapezoid manuever case
     {
         float radius = d_center / d_theta;
-        x += radius * (sin(theta_old + d_theta) - sin(theta_old));
-        y += radius * (-cos(theta_old + d_theta) + cos(theta_old));
+        x += d_center * cos(half_theta); //radius * (sin(theta_old + d_theta) - sin(theta_old));
+        y += d_center * sin(half_theta);  //radius * (-cos(theta_old + d_theta) + cos(theta_old));
         theta += d_theta;
     }
     theta = normalizeAngle(theta);
@@ -104,14 +104,14 @@ void EKFState::predict(float d_left, float d_right)
 
     if (abs(d_theta) < 1e-6) // Straight line case
     {
-        F[0][2] = -d_center * sin(theta_old);
-        F[1][2] = d_center * cos(theta_old);
+        F[0][2] = -d_center * sin(half_theta);
+        F[1][2] = d_center * cos(half_theta);
     }
     else // Arc or trapezoid manuever case
     {
         float radius = d_center / d_theta;
-        F[0][2] = radius * (cos(theta_old + d_theta) - cos(theta_old));
-        F[1][2] = radius * (sin(theta_old + d_theta) - sin(theta_old));
+        F[0][2] = radius * (cos(half_theta + d_theta) - cos(half_theta));
+        F[1][2] = radius * (sin(half_theta + d_theta) - sin(half_theta));
     }
     F[1][0] = 0.0f;
     F[1][1] = 1.0f;

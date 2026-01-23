@@ -17,12 +17,14 @@ class Drive{
             Lmotor(Lmotor),
             Lenc(Lenc),
             Renc(Renc),
-            mpu(mpu6050)                                                                                            
+            mpu(mpu6050),      
+            wBase(wheelBase),         // Initialize wBase here
+            wDiameter(wheelDiameter),
+            ekf(wheelBase, wheelDiameter / 2.0f)
     {
-        wBase = wheelBase;
-        wDiameter = wheelDiameter;
+        
     }
-        void driveDistance(float distance, int speed);
+        void driveDistance(float distance, int speed, float theta);
         void stop();
         void reset();
         void turnR(int speed);
@@ -35,6 +37,7 @@ class Drive{
         void begin();
         void accel(int targetSpeed, int accelRate);
         void decel(int targetSpeed, int decelRate);
+        void driveStraightMission(float distance, int speed);
 
     private:
 
@@ -52,11 +55,12 @@ class Drive{
         float wDiameter;
         float bias = 0.f;
 
-        float Kp = 0.0001f; // if this doesn't work try 30.0f
+        float Kp = 0.0001f; 
+        float Kc = 75.0f;  
 
         uint8_t startPWM(int linSpeed);
 
-        EKFState ekf(float wb, float wr);
+        EKFState ekf;
 
 };
 

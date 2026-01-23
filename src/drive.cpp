@@ -43,28 +43,32 @@ void Drive::begin()
 }
 
 // EKF Assisted Drive Distance
-void Drive::driveDistance(float distance, int speed)
+void Drive::driveDistance(float distance, int speed, float theta)
 {
-    EKFState ekf(wBase, wDiameter / 2.f);
     sensors_event_t a, g, temp;
     reset();
     Lcon.reset();
     Rcon.reset();
-    ekf.reset();
 
-    float targetTheta = 0.0f; // We want to stay at 0 heading
-    unsigned long prevTime = millis();
-    unsigned long now = millis();
-    unsigned long start = millis();
+    // We want to stay at 0 heading if going straight 
+    // but if going in trapezoid, we want to maintain the angle that we were just turned by
+    float targetTheta = theta; 
+
+    unsigned long prevTime = micros();
+    unsigned long now = micros();
+    unsigned long start = micros();
     float dt = 0.0f;
     float lastLeftDist = 0.0f;
     float lastRightDist = 0.0f;
+    float startX = ekf.getX();
+    float startY = ekf.getY();
+    float traveled = 0.0f;
 
-    while (abs(ekf.getX()) < abs(distance))
+    while (traveled < abs(distance)) // Replaced abs(ekf.getX()) < abs(distance) with traveled < abs(distance)
     {
-        now = millis();
-        dt = (now - prevTime) / 1000.f;
-        if (dt >= 0.02f) // 50 Hz update rate
+        now = micros();
+        dt = (now - prevTime) / 1000000.f;
+        if (dt >= 0.002f) // 500 Hz update rate
         {
             // Read Encoders
             float leftDist = Lenc.read() * Lcon.MPC;
@@ -86,9 +90,13 @@ void Drive::driveDistance(float distance, int speed)
             // Update EKF with gyro measurement
             ekf.update(gyroZ, dt);
 
+            float dx = ekf.getX() - startX;
+            float dy = ekf.getY() - startY;
+            traveled = sqrt(dx * dx + dy * dy);
+
             // Heading Correction using EKF estimate
             float headingError = targetTheta - ekf.getTheta();
-            float steeringCorrection = Kp * headingError;
+            float steeringCorrection = Kc * headingError;
 
             // apply correction to motor speeds
             int RightMotorSpeed = speed + steeringCorrection;
@@ -114,7 +122,6 @@ void Drive::driveDistance(float distance, int speed)
 // EKF Assisted Turn (if ever necessary)
 void Drive::EKFturn(float theta_Radians, int speed)
 {
-    EKFState ekf(wBase, wDiameter / 2.f);
     sensors_event_t a, g, temp;
     float targetTheta = theta_Radians; // TrapezoidManuever will pass in radian angles for turning
     reset();
@@ -172,6 +179,15 @@ void Drive::EKFturn(float theta_Radians, int speed)
     stop();
 }
 
+void Drive::driveStraightMission(float distance, int speed) {
+    // Reset everything because we are starting a NEW run from the start line
+    ekf.reset(); 
+    reset(); // Reset motor encoders
+    
+    // 2. Drive at heading 0
+    driveDistance(distance, speed, 0.0f);
+}
+
 void Drive::trapezoidManuever(float lateralDistance, float totalDistance, int speed)
 {
     // Implementation of trapezoidal maneuver
@@ -187,6 +203,8 @@ void Drive::trapezoidManuever(float lateralDistance, float totalDistance, int sp
 
     float angle = atan2(h, d / 4); // angle in radians
 
+    ekf.reset();
+
     enum State
     {
         INIT_TURN,
@@ -200,7 +218,7 @@ void Drive::trapezoidManuever(float lateralDistance, float totalDistance, int sp
 
     State currentState = INIT_TURN;
 
-    while ((!currentState) == COMPLETE)
+    while (currentState != COMPLETE)
     {
         switch (currentState)
         {
@@ -212,7 +230,7 @@ void Drive::trapezoidManuever(float lateralDistance, float totalDistance, int sp
             break;
         case DIAGONAL_TRANSIT_1:
             // Drive the diagonal distance
-            driveDistance(DiagonalDistance, speed);
+            driveDistance(DiagonalDistance, speed, angle);
             currentState = ALIGN_GATE;
             break;
         case ALIGN_GATE:
@@ -222,7 +240,7 @@ void Drive::trapezoidManuever(float lateralDistance, float totalDistance, int sp
             break;
         case DRIVE_GATE:
             // Drive through the gate
-            driveDistance(DistanceThroughGate, speed);
+            driveDistance(DistanceThroughGate, speed, 0.0f);
             currentState = EXIT_TURN;
             break;
         case EXIT_TURN:
@@ -232,7 +250,7 @@ void Drive::trapezoidManuever(float lateralDistance, float totalDistance, int sp
             break;
         case DIAGONAL_TRANSIT_2:
             // Drive the second diagonal distance
-            driveDistance(DiagonalDistance, speed);
+            driveDistance(DiagonalDistance, speed, -angle);
             currentState = COMPLETE;
             break;
         case COMPLETE:
