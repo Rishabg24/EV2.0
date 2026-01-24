@@ -56,7 +56,12 @@ class Drive{
         float bias = 0.f;
 
         float Kp = 0.0001f; 
-        float Kc = 75.0f;  
+        float Kc = 11.0f;  // heading gain constant
+        float Ky = 0.27f;   // lateral gain constant
+        float Kcd = 5.5f;  // lateral derivative gain constant
+        float lastHeadingError = 0.f;
+
+
 
         uint8_t startPWM(int linSpeed);
 

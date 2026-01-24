@@ -28,13 +28,13 @@ class EKFState{
         // Helper functions
         void calculateJacobian(float d_left, float d_right, float F[3][3]);
         void matrixMultiply(float A[3][3], float B[3][3], float result[3][3]);
-        float normalizeAngle(float angle);  // Wrap to [-PI, PI]
-
+        
     public:
         EKFState(float wb, float wr);  // Constructor with geometry (wheelbase, wheel_radius)
         
         void predict(float delta_left, float delta_right);
         void update(float gyro_z, float dt);
+        float normalizeAngle(float angle);  // Wrap to [-PI, PI]
         void reset();
         
         // Getters

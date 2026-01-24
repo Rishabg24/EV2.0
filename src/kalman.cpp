@@ -12,12 +12,12 @@ EKFState::EKFState(float wb, float wr)
     theta = 0.0f;
 
     // Initialize process noise parameters. " How much do we trust the model"
-    Q_x = 0.001f;     // TUNE THESE VALUES
-    Q_y = 0.001f;     // TUNE THESE VALUES
-    Q_theta = 0.001f; // TUNE THESE VALUES
+    Q_x = 0.01f;     // TUNE THESE VALUES
+    Q_y = 0.01f;     // TUNE THESE VALUES
+    Q_theta = 0.01f; // TUNE THESE VALUES
 
     // Initialize measurement noise parameter. " How much do we trust the gyro"
-    R_gyro = 0.03f; // TUNE THIS VALUE
+    R_gyro = 0.01f; // TUNE THIS VALUE
 
     for (int i = 0; i < 3; i++)
     {
@@ -28,8 +28,8 @@ EKFState::EKFState(float wb, float wr)
     }
 
     // Initialize covariance matrix P with small values. " How confident are we in initial state"
-    P[0][0] = 0.001f; // TUNE THESE VALUES
-    P[1][1] = 0.001f; // TUNE THESE VALUES
+    P[0][0] = 0.01f;  // TUNE THESE VALUES
+    P[1][1] = 0.01f;  // TUNE THESE VALUES
     P[2][2] = 0.001f; // TUNE THESE VALUES
 
     for (int i = 0; i < 3; i++)
@@ -76,7 +76,7 @@ void EKFState::predict(float d_left, float d_right)
     // KINEMATICS: Convert encoder ticks to center displacement and heading change
     float d_center = (d_left + d_right) / 2.0f;
     float d_theta = (d_right - d_left) / wheelbase;
-    float half_theta = theta + (d_theta/ 2.0f);
+    float half_theta = theta + (d_theta / 2.0f);
 
     // STATE ESTIMATE UPDATE: Moving the robot in the world
     if (abs(d_theta) < 1e-6) // Straight line case (prevents division by zero)
@@ -88,8 +88,8 @@ void EKFState::predict(float d_left, float d_right)
     else // Arc or trapezoid manuever case
     {
         float radius = d_center / d_theta;
-        x += d_center * cos(half_theta); //radius * (sin(theta_old + d_theta) - sin(theta_old));
-        y += d_center * sin(half_theta);  //radius * (-cos(theta_old + d_theta) + cos(theta_old));
+        x += d_center * cos(half_theta); // radius * (sin(theta_old + d_theta) - sin(theta_old));
+        y += d_center * sin(half_theta); // radius * (-cos(theta_old + d_theta) + cos(theta_old));
         theta += d_theta;
     }
     theta = normalizeAngle(theta);
@@ -109,9 +109,12 @@ void EKFState::predict(float d_left, float d_right)
     }
     else // Arc or trapezoid manuever case
     {
-        float radius = d_center / d_theta;
-        F[0][2] = radius * (cos(half_theta + d_theta) - cos(half_theta));
-        F[1][2] = radius * (sin(half_theta + d_theta) - sin(half_theta));
+        // float radius = d_center / d_theta;
+        // F[0][2] = radius * (cos(half_theta + d_theta) - cos(half_theta));
+        // F[1][2] = radius * (sin(half_theta + d_theta) - sin(half_theta));
+
+        F[0][2] = -d_center * sin(half_theta); // Same as straight!
+        F[1][2] = d_center * cos(half_theta);  // Same as straight!
     }
     F[1][0] = 0.0f;
     F[1][1] = 1.0f;
@@ -163,8 +166,6 @@ void EKFState::update(float gyro_z, float dt)
     K[1] = P[1][2] / S; // Impact of heading error on Y estimate
     K[2] = P[2][2] / S; // Impact of heading error on Theta estimate
 
-
-    
     // STATE CORRECTION: Adjust x, y, theta based on the gyro's feedback
     x += K[0] * innovation;
     y += K[1] * innovation;
@@ -206,8 +207,8 @@ void EKFState::reset()
     }
 
     P[0][0] = 0.001f;
-    P[1][1] = 0.001f; 
-    P[2][2] = 0.001f; 
+    P[1][1] = 0.001f;
+    P[2][2] = 0.001f;
 }
 
 void EKFState::printState()
@@ -219,7 +220,3 @@ void EKFState::printState()
     Serial.print(" Theta: ");
     Serial.println(theta);
 }
-
-float EKFState::getX() { return x; }
-float EKFState::getY() { return y; }
-float EKFState::getTheta() { return theta; }

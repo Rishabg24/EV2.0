@@ -49,11 +49,9 @@ void Drive::driveDistance(float distance, int speed, float theta)
     reset();
     Lcon.reset();
     Rcon.reset();
+    lastHeadingError = 0.0f;  // ADD: Reset derivative tracking
 
-    // We want to stay at 0 heading if going straight 
-    // but if going in trapezoid, we want to maintain the angle that we were just turned by
-    float targetTheta = theta; 
-
+    float targetTheta = theta;
     unsigned long prevTime = micros();
     unsigned long now = micros();
     unsigned long start = micros();
@@ -64,46 +62,59 @@ void Drive::driveDistance(float distance, int speed, float theta)
     float startY = ekf.getY();
     float traveled = 0.0f;
 
-    while (traveled < abs(distance)) // Replaced abs(ekf.getX()) < abs(distance) with traveled < abs(distance)
+    while (traveled < abs(distance))
     {
         now = micros();
         dt = (now - prevTime) / 1000000.f;
-        if (dt >= 0.002f) // 500 Hz update rate
+        if (dt >= 0.002f)
         {
-            // Read Encoders
             float leftDist = Lenc.read() * Lcon.MPC;
             float rightDist = Renc.read() * Rcon.MPC;
-
             float deltaLeft = leftDist - lastLeftDist;
             float deltaRight = rightDist - lastRightDist;
 
-            // EKF prediction step and u
             ekf.predict(deltaLeft, deltaRight);
 
             lastLeftDist = leftDist;
             lastRightDist = rightDist;
 
-            // Read Gyro
             mpu.getEvent(&a, &g, &temp);
             float gyroZ = g.gyro.z - bias;
-
-            // Update EKF with gyro measurement
             ekf.update(gyroZ, dt);
 
             float dx = ekf.getX() - startX;
             float dy = ekf.getY() - startY;
             traveled = sqrt(dx * dx + dy * dy);
 
-            // Heading Correction using EKF estimate
-            float headingError = targetTheta - ekf.getTheta();
-            float steeringCorrection = Kc * headingError;
+            if (traveled < 5.0f)
+            {
+                Lmotor.drive(Lcon.output(Lenc, speed, dt));
+                Rmotor.drive(Rcon.output(Renc, speed, dt));
+            }
+            else
+            {
+                // Normal control with corrections
+                float lateralError = (-sin(targetTheta) * dx) + (cos(targetTheta) * dy);
+                float sideCorrectionAngle = constrain(lateralError * Ky, -0.35f, 0.35f);
+                float modifiedTargetTheta = targetTheta - sideCorrectionAngle;
+                float headingError = ekf.normalizeAngle(modifiedTargetTheta - ekf.getTheta());
+                
+                // ADD DERIVATIVE TERM
+                float headingDerivative = (headingError - lastHeadingError) / dt;
+                lastHeadingError = headingError;
+                
+                // PD Control instead of just P
+                float steeringCorrection = Kc * headingError + Kcd * headingDerivative;
+                
+                // Constrain to prevent saturation
+                steeringCorrection = constrain(steeringCorrection, -100.0f, 100.0f);
 
-            // apply correction to motor speeds
-            int RightMotorSpeed = speed + steeringCorrection;
-            int LeftMotorSpeed = speed - steeringCorrection;
+                int RightMotorSpeed = speed + (int)steeringCorrection;
+                int LeftMotorSpeed = speed - (int)steeringCorrection;
 
-            Lmotor.drive(Lcon.output(Lenc, LeftMotorSpeed, dt));
-            Rmotor.drive(Rcon.output(Renc, RightMotorSpeed, dt));
+                Lmotor.drive(Lcon.output(Lenc, LeftMotorSpeed, dt));
+                Rmotor.drive(Rcon.output(Renc, RightMotorSpeed, dt));
+            }
 
             prevTime = now;
             Serial.print((now - start) / 1000.f);
@@ -115,9 +126,103 @@ void Drive::driveDistance(float distance, int speed, float theta)
             Serial.println(ekf.getTheta());
         }
     }
-
     stop();
 }
+// void Drive::driveDistance(float distance, int speed, float theta)
+// {
+//     sensors_event_t a, g, temp;
+//     reset();
+//     Lcon.reset();
+//     Rcon.reset();
+//     ekf.reset();
+
+//     // NEW: Let everything settle and get initial sensor reading
+//     delay(100);
+
+//     // NEW: Initialize EKF with sensor data before moving
+//     mpu.getEvent(&a, &g, &temp);
+//     float gyroZ = g.gyro.z - bias;
+
+//     // We want to stay at 0 heading if going straight
+//     // but if going in trapezoid, we want to maintain the angle that we were just turned by
+//     float targetTheta = theta;
+
+//     unsigned long prevTime = micros();
+//     unsigned long now = micros();
+//     unsigned long start = micros();
+//     float dt = 0.0f;
+//     float lastLeftDist = 0.0f;
+//     float lastRightDist = 0.0f;
+//     float startX = ekf.getX();
+//     float startY = ekf.getY();
+//     float traveled = 0.0f;
+
+//     while (traveled < abs(distance)) // Replaced abs(ekf.getX()) < abs(distance) with traveled < abs(distance)
+//     {
+//         now = micros();
+//         dt = (now - prevTime) / 1000000.f;
+//         if (dt >= 0.002f) // 500 Hz update rate
+//         {
+//             // int currentTargetSpeed = speed;
+//             // if (traveled < 100){
+//             //     currentTargetSpeed = map(traveled, 0, 100, 100, speed);
+//             // }
+
+//             // Read Encoders
+//             float leftDist = Lenc.read() * Lcon.MPC;
+//             float rightDist = Renc.read() * Rcon.MPC;
+
+//             float deltaLeft = leftDist - lastLeftDist;
+//             float deltaRight = rightDist - lastRightDist;
+
+//             // EKF prediction step and u
+//             ekf.predict(deltaLeft, deltaRight);
+
+//             lastLeftDist = leftDist;
+//             lastRightDist = rightDist;
+
+//             // Read Gyro
+//             mpu.getEvent(&a, &g, &temp);
+//             float gyroZ = g.gyro.z - bias;
+
+//             // Update EKF with gyro measurement
+//             ekf.update(gyroZ, dt);
+
+//             float dx = ekf.getX() - startX;
+//             float dy = ekf.getY() - startY;
+//             traveled = sqrt(dx * dx + dy * dy);
+
+//             // Lateral error calculation
+//             float lateralError = (-sin(targetTheta) * dx) + (cos(targetTheta) * dy);
+
+//             // Lateral Correction using EKF estimate
+//             float sideCorrectionAngle = constrain(lateralError * Ky, -0.35f, 0.35f); // limit to +/- ~20 degrees in radians
+//             float modifiedTargetTheta = targetTheta - sideCorrectionAngle;
+
+//             // Heading Correction using EKF estimate
+//             float headingError = ekf.normalizeAngle(modifiedTargetTheta - ekf.getTheta());
+//             float steeringCorrection = Kc * headingError;
+
+//             // apply correction to motor speeds
+//             int RightMotorSpeed = speed + steeringCorrection;
+//             int LeftMotorSpeed = speed - steeringCorrection;
+
+//             Lmotor.drive(Lcon.output(Lenc, LeftMotorSpeed, dt));
+//             Rmotor.drive(Rcon.output(Renc, RightMotorSpeed, dt));
+
+//             prevTime = now;
+//             Serial.print((now - start) / 1000.f);
+//             Serial.print(",");
+//             Serial.print(ekf.getX());
+//             Serial.print(",");
+//             Serial.print(ekf.getY());
+//             Serial.print(",");
+//             Serial.println(ekf.getTheta());
+//         }
+//     }
+
+//     stop();
+// }
 
 // EKF Assisted Turn (if ever necessary)
 void Drive::EKFturn(float theta_Radians, int speed)
@@ -171,19 +276,26 @@ void Drive::EKFturn(float theta_Radians, int speed)
             // Debug
             Serial.print((now - start) / 1000.0f);
             Serial.print(",");
+            Serial.print(ekf.getX());
+            Serial.print(",");
+            Serial.print(ekf.getY());
+            Serial.print(",");
             Serial.print(ekf.getTheta() * 180.0f / PI);
             Serial.print(",");
-            Serial.println(targetTheta * 180.0f / PI);
+            Serial.print(targetTheta * 180.0f / PI);
+            Serial.print(Renc.read() * Rcon.MPC);
+            Serial.println(Lenc.read() * Lcon.MPC);
         }
     }
     stop();
 }
 
-void Drive::driveStraightMission(float distance, int speed) {
+void Drive::driveStraightMission(float distance, int speed)
+{
     // Reset everything because we are starting a NEW run from the start line
-    ekf.reset(); 
+    ekf.reset();
     reset(); // Reset motor encoders
-    
+
     // 2. Drive at heading 0
     driveDistance(distance, speed, 0.0f);
 }
@@ -195,6 +307,9 @@ void Drive::trapezoidManuever(float lateralDistance, float totalDistance, int sp
     // based on the provided lateral distance and total distance.
     // distance inputs in meters
 
+    ekf.reset();
+    reset();
+
     float d = totalDistance;
     float h = lateralDistance; // should be 0.5m
 
@@ -202,8 +317,6 @@ void Drive::trapezoidManuever(float lateralDistance, float totalDistance, int sp
     float DistanceThroughGate = (d / 2.f) * 1000.f;                          // in mm
 
     float angle = atan2(h, d / 4); // angle in radians
-
-    ekf.reset();
 
     enum State
     {
@@ -264,6 +377,20 @@ void Drive::trapezoidManuever(float lateralDistance, float totalDistance, int sp
 
 void Drive::stop()
 {
+    // Initial cut of forward power
+    Rmotor.drive(0);
+    Lmotor.drive(0);
+
+    // Apply a brief reverse "counter-pulse"
+
+    Rmotor.drive(-200);
+    Lmotor.drive(-200);
+
+    // The Duration: Hold the reverse pulse for a few milliseconds
+    // This value needs to be tuned based on your vehicle's weight/speed
+    delay(50);
+
+    // 4. Final Stop: Cut power so it doesn't keep moving backward
     Rmotor.drive(0);
     Lmotor.drive(0);
 }
