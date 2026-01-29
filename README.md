@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project supplies a basic PID control system utilizing Encoder feedback to help differential drive rc cars
+This project supplies a basic PID control system utilizing Encoder feedback along with an extended kalman filter with an MPU6050 IMU to help differential drive rc cars
 that are powered by Arduino to drive in a straight line and turn 90 degrees.
 
 ## How It Works
